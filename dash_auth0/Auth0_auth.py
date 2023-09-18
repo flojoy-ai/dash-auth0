@@ -3,45 +3,45 @@ import os
 import flask
 from authlib.integrations.requests_client import OAuth2Session
 
-from flask import url_for
 from urllib.parse import urlencode, urljoin
-
-from requests import request
 
 
 from .auth import Auth
 
 COOKIE_EXPIRY = 60 * 60 * 24 * 14
-COOKIE_AUTH_USER_NAME = 'AUTH-USER'
-COOKIE_AUTH_ACCESS_TOKEN = 'AUTH-TOKEN'
+COOKIE_AUTH_USER_NAME = "AUTH-USER"
+COOKIE_AUTH_ACCESS_TOKEN = "AUTH-TOKEN"
 
-AUTH_STATE_KEY = 'auth_state'
+AUTH_STATE_KEY = "auth_state"
 
-CLIENT_ID = os.environ.get('AUTH0_AUTH_CLIENT_ID')
-CLIENT_SECRET = os.environ.get('AUTH0_AUTH_CLIENT_SECRET')
-LOGOUT_URL = os.environ.get('AUTH0_LOGOUT_URL')
-AUTH_REDIRECT_URI = '/login/callback'
+CLIENT_ID = os.environ.get("AUTH0_AUTH_CLIENT_ID")
+CLIENT_SECRET = os.environ.get("AUTH0_AUTH_CLIENT_SECRET")
+LOGOUT_URL = os.environ.get("AUTH0_LOGOUT_URL")
+AUTH_REDIRECT_URI = "/login/callback"
 
-AUTH_FLASK_ROUTES = os.environ.get('AUTH_FLASK_ROUTES',"false")
+AUTH_FLASK_ROUTES = os.environ.get("AUTH_FLASK_ROUTES", "false")
 if AUTH_FLASK_ROUTES == "true":
     AUTH_FLASK_ROUTES = True
 if AUTH_FLASK_ROUTES == "false":
     AUTH_FLASK_ROUTES = False
 else:
-    print(f"warning: AUTH_FLASK_ROUTES is set to {AUTH_FLASK_ROUTES}. Must be 'true' or 'false', otherwise will raise this warning and be set to False.")
+    print(
+        f"warning: AUTH_FLASK_ROUTES is set to {AUTH_FLASK_ROUTES}. Must be 'true' or 'false', otherwise will raise this warning and be set to False."
+    )
     AUTH_FLASK_ROUTES = False
+
 
 class Auth0Auth(Auth):
     def __init__(self, app):
         Auth.__init__(self, app)
-        app.server.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
-        app.server.config['SESSION_TYPE'] = 'filesystem'
+        app.server.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
+        app.server.config["SESSION_TYPE"] = "filesystem"
 
-        @app.server.route('/login/callback')
+        @app.server.route("/login/callback")
         def callback():
             return self.login_callback()
 
-        @app.server.route('/logout/')
+        @app.server.route("/logout/")
         def logout():
             return self.logout()
 
@@ -53,22 +53,21 @@ class Auth0Auth(Auth):
         return flask.session.get(user) == token
 
     def login_request(self):
-        
-        redirect_uri = urljoin(flask.request.base_url, AUTH_REDIRECT_URI) 
+        redirect_uri = urljoin(flask.request.base_url, AUTH_REDIRECT_URI)
 
         session = OAuth2Session(
             CLIENT_ID,
             CLIENT_SECRET,
-            scope=os.environ.get('AUTH0_AUTH_SCOPE'),
-            redirect_uri=redirect_uri            
-        )
-        
-        uri, state = session.create_authorization_url(
-            os.environ.get('AUTH0_AUTH_URL'), 
-            audience=os.environ.get('AUTH0_API_AUDIENCE')
+            scope=os.environ.get("AUTH0_AUTH_SCOPE"),
+            redirect_uri=redirect_uri,
         )
 
-        flask.session['REDIRECT_URL'] = flask.request.url
+        uri, state = session.create_authorization_url(
+            os.environ.get("AUTH0_AUTH_URL"),
+            audience=os.environ.get("AUTH0_API_AUDIENCE"),
+        )
+
+        flask.session["REDIRECT_URL"] = flask.request.url
         flask.session[AUTH_STATE_KEY] = state
         flask.session.permanent = False
 
@@ -90,41 +89,48 @@ class Auth0Auth(Auth):
                 return original_index(*args, **kwargs)
             else:
                 return self.login_request()
+
         return wrap
 
     def login_callback(self):
-        if 'error' in flask.request.args:
-            if flask.request.args.get('error') == 'access_denied':
-                return 'You denied access.'
-            return 'Error encountered.'
+        if "error" in flask.request.args:
+            if flask.request.args.get("error") == "access_denied":
+                return "You denied access."
+            return "Error encountered."
 
-        if 'code' not in flask.request.args and 'state' not in flask.request.args:
+        if "code" not in flask.request.args and "state" not in flask.request.args:
             return self.login_request()
         else:
             # user is successfully authenticated
             auth0 = self.__get_auth(state=flask.session[AUTH_STATE_KEY])
             try:
                 token = auth0.fetch_token(
-                    os.environ.get('AUTH0_AUTH_TOKEN_URI'),
+                    os.environ.get("AUTH0_AUTH_TOKEN_URI"),
                     client_secret=CLIENT_SECRET,
-                    authorization_response=flask.request.url
+                    authorization_response=flask.request.url,
                 )
-                print(token['id_token'])
-                print(token['access_token'])
+                print(token["id_token"])
+                print(token["access_token"])
             except Exception as e:
                 return e.__dict__
 
             auth0 = self.__get_auth(token=token)
-            resp = auth0.get(os.environ.get('AUTH0_AUTH_USER_INFO_URL'))
+            resp = auth0.get(os.environ.get("AUTH0_AUTH_USER_INFO_URL"))
             if resp.status_code == 200:
                 user_data = resp.json()
-                r = flask.redirect(flask.session['REDIRECT_URL'])
-                r.set_cookie(COOKIE_AUTH_USER_NAME, user_data['name'], max_age=COOKIE_EXPIRY)
-                r.set_cookie(COOKIE_AUTH_ACCESS_TOKEN, token['access_token'], max_age=COOKIE_EXPIRY)
-                flask.session[user_data['name']] = token['access_token']
+                r = flask.redirect(flask.session["REDIRECT_URL"])
+                r.set_cookie(
+                    COOKIE_AUTH_USER_NAME, user_data["name"], max_age=COOKIE_EXPIRY
+                )
+                r.set_cookie(
+                    COOKIE_AUTH_ACCESS_TOKEN,
+                    token["access_token"],
+                    max_age=COOKIE_EXPIRY,
+                )
+                flask.session[user_data["name"]] = token["access_token"]
                 return r
 
-            return 'Could not fetch your information.'
+            return "Could not fetch your information."
 
     @staticmethod
     def __get_auth(state=None, token=None):
@@ -134,7 +140,7 @@ class Auth0Auth(Auth):
             return OAuth2Session(
                 CLIENT_ID,
                 state=state,
-                redirect_uri=urljoin(flask.request.base_url, AUTH_REDIRECT_URI)
+                redirect_uri=urljoin(flask.request.base_url, AUTH_REDIRECT_URI),
             )
         return OAuth2Session(
             CLIENT_ID,
@@ -143,15 +149,14 @@ class Auth0Auth(Auth):
 
     @staticmethod
     def logout():
-        
         # Clear session stored data
         flask.session.clear()
-        
+
         # Redirect user to logout endpoint
         return_url = flask.request.host_url
-        params = {'returnTo': return_url, 'client_id': CLIENT_ID}
-        r = flask.redirect(LOGOUT_URL + '?' + urlencode(params))
+        params = {"returnTo": return_url, "client_id": CLIENT_ID}
+        r = flask.redirect(LOGOUT_URL + "?" + urlencode(params))
         r.delete_cookie(COOKIE_AUTH_USER_NAME)
         r.delete_cookie(COOKIE_AUTH_ACCESS_TOKEN)
-        
+
         return r

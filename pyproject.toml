@@ -1,10 +1,14 @@
 [tool.poetry]
-name = "dash-auth0-auth"
+name = "dash-auth0"
 version = "0.1.6"
 description = "Authenticate your Dash app with Auth0"
-authors = ["Daniele Brambilla <daniele.bram@gmail.com>"]
+authors = [
+  "Daniele Brambilla <daniele.bram@gmail.com>",
+  "Joey Yu <joey@flojoy.io>",
+]
 license = "MIT"
 readme = "README.md"
+packages = [{ include = "dash_auth0" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
