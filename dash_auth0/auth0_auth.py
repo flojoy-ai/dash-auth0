@@ -8,20 +8,34 @@ from urllib.parse import urlencode, urljoin
 
 from .auth import Auth
 
+
+def get_env_var(var_name: str, default: str | None = None) -> str:
+    value = os.environ.get(var_name)
+    if value is None:
+        if default is None:
+            raise EnvironmentError(f"Must set {var_name} environment variable.")
+        return default
+    return value
+
+
 COOKIE_EXPIRY = 60 * 60 * 24 * 14
 COOKIE_AUTH_USER_NAME = "AUTH-USER"
 COOKIE_AUTH_ACCESS_TOKEN = "AUTH-TOKEN"
 
 AUTH_STATE_KEY = "auth_state"
 
-CLIENT_ID = os.environ.get("AUTH0_AUTH_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("AUTH0_AUTH_CLIENT_SECRET")
-LOGOUT_URL = os.environ.get("AUTH0_LOGOUT_URL")
+CLIENT_ID = get_env_var("AUTH0_AUTH_CLIENT_ID")
+CLIENT_SECRET = get_env_var("AUTH0_AUTH_CLIENT_SECRET")
+LOGOUT_URL = get_env_var("AUTH0_LOGOUT_URL")
 AUTH_REDIRECT_URI = "/login/callback"
 
-AUTH_FLASK_ROUTES = os.environ.get("AUTH_FLASK_ROUTES", "false")
+USER_INFO_URL = get_env_var("AUTH0_AUTH_USER_INFO_URL")
+
+AUTH_FLASK_ROUTES = get_env_var("AUTH_FLASK_ROUTES", "false")
+
 if AUTH_FLASK_ROUTES == "true":
     AUTH_FLASK_ROUTES = True
+
 if AUTH_FLASK_ROUTES == "false":
     AUTH_FLASK_ROUTES = False
 else:
@@ -34,7 +48,7 @@ else:
 class Auth0Auth(Auth):
     def __init__(self, app):
         Auth.__init__(self, app)
-        app.server.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
+        app.server.config["SECRET_KEY"] = get_env_var("FLASK_SECRET_KEY")
         app.server.config["SESSION_TYPE"] = "filesystem"
 
         @app.server.route("/login/callback")
@@ -58,13 +72,13 @@ class Auth0Auth(Auth):
         session = OAuth2Session(
             CLIENT_ID,
             CLIENT_SECRET,
-            scope=os.environ.get("AUTH0_AUTH_SCOPE"),
+            scope=get_env_var("AUTH0_AUTH_SCOPE"),
             redirect_uri=redirect_uri,
         )
 
         uri, state = session.create_authorization_url(
-            os.environ.get("AUTH0_AUTH_URL"),
-            audience=os.environ.get("AUTH0_API_AUDIENCE"),
+            get_env_var("AUTH0_AUTH_URL"),
+            audience=get_env_var("AUTH0_API_AUDIENCE"),
         )
 
         flask.session["REDIRECT_URL"] = flask.request.url
@@ -105,7 +119,7 @@ class Auth0Auth(Auth):
             auth0 = self.__get_auth(state=flask.session[AUTH_STATE_KEY])
             try:
                 token = auth0.fetch_token(
-                    os.environ.get("AUTH0_AUTH_TOKEN_URI"),
+                    get_env_var("AUTH0_AUTH_TOKEN_URI"),
                     client_secret=CLIENT_SECRET,
                     authorization_response=flask.request.url,
                 )
@@ -115,7 +129,9 @@ class Auth0Auth(Auth):
                 return e.__dict__
 
             auth0 = self.__get_auth(token=token)
-            resp = auth0.get(os.environ.get("AUTH0_AUTH_USER_INFO_URL"))
+
+            resp = auth0.get(USER_INFO_URL)
+
             if resp.status_code == 200:
                 user_data = resp.json()
                 r = flask.redirect(flask.session["REDIRECT_URL"])
